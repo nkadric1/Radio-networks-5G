@@ -9,7 +9,7 @@
 
 ----------------
 
-*© 2023 Amina Hromić, Azra Žunić, Nadina Miralem & Nerma Kadrić.*
+*© 2025 Amina Hromić, Azra Žunić, Nadina Miralem & Nerma Kadrić.*
 
 *Master IoT*
 
