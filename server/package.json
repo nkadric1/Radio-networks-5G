@@ -1,0 +1,28 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server",
+    "dev": "nodemon server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jquery": "^3.7.1",
+    "leaflet": "^1.9.4",
+    "lodash": "^4.17.21",
+    "xhr2": "^0.2.1",
+    "xml-js": "^1.6.11",
+    "xmlhttprequest": "^1.8.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
