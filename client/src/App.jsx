@@ -6,32 +6,36 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw';
 
 const App = () => {
-    const [areaCoordinates, setAreaCoordinates] = useState(null);
+    const [areaCoordinates, setAreaCoordinates] = useState([]);
     const [networkSettings, setNetworkSettings] = useState(null);
     const [error, setError] = useState(null);
     const mapRef = useRef(null);
     const featureGroupRef = useRef(null);
+
+    // Define France bounding box (to limit selection)
     const franceBounds = [
-        [41.0, -5.0],  // Southwest corner (near Spain)
-        [51.5, 10.0]   // Northeast corner (near Germany)
+        [41.0, -5.0],  // Southwest corner (Spain border)
+        [51.5, 10.0]   // Northeast corner (Germany border)
     ];
 
-    // Function to fetch network settings including elevation
+    // Function to fetch network settings from the backend
     const fetchNetworkSettings = async () => {
-        if (!areaCoordinates) {
+        if (!areaCoordinates || areaCoordinates.length === 0) {
             setError("Please select an area first!");
             return;
         }
-    
-        const { latitude, longitude } = areaCoordinates;
-    
+
         try {
-            const response = await fetch(`http://localhost:8080/get-network-settings?latitude=${latitude}&longitude=${longitude}`);
-            
+            const response = await fetch(`http://localhost:8080/get-network-settings`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ coordinates: areaCoordinates })
+            });
+
             if (!response.ok) {
                 throw new Error(`Server error: ${response.statusText}`);
             }
-    
+
             const data = await response.json();
             setNetworkSettings(data);
             setError(null);
@@ -40,17 +44,15 @@ const App = () => {
             console.error("Fetch error:", err);
         }
     };
-    
 
-    // Function to initialize map and drawing controls
     useEffect(() => {
         if (!mapRef.current) return;
 
         const map = L.map(mapRef.current, {
             center: [46.603354, 1.888334], // France center
             zoom: 6,
-            maxBounds: franceBounds, // Restrict movement
-            maxBoundsViscosity: 1.0  // Prevent panning outside bounds
+            maxBounds: franceBounds, 
+            maxBoundsViscosity: 1.0  
         });
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
@@ -73,17 +75,24 @@ const App = () => {
         map.addControl(drawControl);
 
         map.on('draw:created', (event) => {
-            drawnItems.clearLayers(); // Clear previous rectangles
+            drawnItems.clearLayers();
             const layer = event.layer;
             drawnItems.addLayer(layer);
 
             if (layer instanceof L.Rectangle) {
                 const bounds = layer.getBounds();
-                const center = bounds.getCenter(); // Get center of selected area
-                setAreaCoordinates({ 
-                    latitude: center.lat, 
-                    longitude: center.lng 
-                });
+
+    
+                const samplePoints = [];
+                const numSamples = 5; // num of points to sample
+
+                for (let i = 0; i < numSamples; i++) {
+                    const lat = bounds.getSouth() + (Math.random() * (bounds.getNorth() - bounds.getSouth()));
+                    const lon = bounds.getWest() + (Math.random() * (bounds.getEast() - bounds.getWest()));
+                    samplePoints.push({ latitude: lat, longitude: lon });
+                }
+
+                setAreaCoordinates(samplePoints);
             }
         });
 
@@ -96,10 +105,10 @@ const App = () => {
         <div>
             <h1>5G Network Area Configuration</h1>
             <div style={{ display: 'flex' }}>
-                {/* Leaflet Map */}
+                {/* Leaflt Map */}
                 <div ref={mapRef} style={{ width: '70%', height: '500px' }}></div>
 
-                {/* Information Panel */}
+                {/* information Panel */}
                 <div style={{ width: '30%', paddingLeft: '20px' }}>
                     <h2>Selected Area Data</h2>
                     <button onClick={fetchNetworkSettings}>Get Configuration</button>
@@ -117,8 +126,8 @@ const App = () => {
 
                     {error && <div style={{ color: 'red' }}><strong>{error}</strong></div>}
 
-                    <h3>Coordinates of Selected Area:</h3>
-                    {areaCoordinates ? (
+                    <h3>Sampled Coordinates of Selected Area:</h3>
+                    {areaCoordinates.length > 0 ? (
                         <pre>{JSON.stringify(areaCoordinates, null, 2)}</pre>
                     ) : (
                         <p>No area selected.</p>

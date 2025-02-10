@@ -3,115 +3,98 @@ const axios = require('axios');
 const cors = require('cors');
 const app = express();
 
+app.use(cors());
+app.use(express.json()); 
+
 const OPENCAGE_API_KEY = 'e0f1785865eb4251b07aaa84d52f33bd';
 const OPENWEATHERMAP_API_KEY = '27b72ec98a488f4d73ea9f87e7bc0efd';
-const GOOGLE_ELEVATION_API_KEY = 'AIzaSyDIOMUgnDOklu1gKXqhfjvcMO033p52W_E&fbclid=IwY2xjawIXQj1leHRuA2FlbQIxMAABHSaM77t0Rn0d70h10rN9Ioyf11QbgvsirSBOruJR7eFlTI_jUgeTEbZApg_aem_YHU8YkfpahH6Tl_u4ZJABw'; // Replace with your API key
+const GOOGLE_ELEVATION_API_KEY = 'AIzaSyDIOMUgnDOklu1gKXqhfjvcMO033p52W_E&fbclid=IwY2xjawIXQj1leHRuA2FlbQIxMAABHSaM77t0Rn0d70h10rN9Ioyf11QbgvsirSBOruJR7eFlTI_jUgeTEbZApg_aem_YHU8YkfpahH6Tl_u4ZJABw';
 
-/*https://maps.googleapis.com/maps/api/elevation/json?locations=39.7391536%2C-104.9847034&
-key=AIzaSyDIOMUgnDOklu1gKXqhfjvcMO033p52W_E&fbclid=IwY2xjawIXQj1leHRuA2FlbQIxMAABHSaM77t0Rn0d70h10rN9Ioyf11QbgvsirSBOruJR7eFlTI_jUgeTEbZApg_aem_YHU8YkfpahH6Tl_u4ZJABw*/
+// Fetch data for multiple points and compute the average
+async function fetchAveragedData(coordinates) {
+    let totalElevation = 0;
+    let totalSpeed = 0;
+    let totalPopulation = 0;
+    let totalBuildings = 0;
 
-app.use(cors());
+    for (let coord of coordinates) {
+        const { latitude, longitude } = coord;
 
-// Getting population density from OpenCage API
-async function getPopulationDensity(latitude, longitude) {
-    const response = await axios.get(`https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${OPENCAGE_API_KEY}`);
-    const city = response.data.results[0]?.components?.city || "Unknown";
-    return city;
-}
+        // Get elevation
+        const elevationResponse = await axios.get(
+            `https://maps.googleapis.com/maps/api/elevation/json?locations=${latitude},${longitude}&key=${GOOGLE_ELEVATION_API_KEY}`
+        );
+        totalElevation += elevationResponse.data.results[0]?.elevation || 0;
 
-// Getting road data from Nominatim OSM API
-async function getRoadData(latitude, longitude) {
-    const response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`);
-    return response.data;
-}
+        // Get road data 
+        const roadResponse = await axios.get(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`
+        );
+        const roadSpeed = roadResponse.data.length > 0 ? Math.random() * 100 : 50; // Simulated speed (replace with actual API)
+        totalSpeed += roadSpeed;
 
-// Getting building data from Nominatim OSM API
-async function getBuildingsData(latitude, longitude) {
-    const response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`);
-    return response.data;
-}
+        // Get population density
+        const populationResponse = await axios.get(
+            `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${OPENCAGE_API_KEY}`
+        );
+        totalPopulation += Math.random() * 2000; // Simulated population density (replace with actual API)
 
-// Getting weather data from OpenWeatherMap API
-async function getWeatherData(latitude, longitude) {
-    const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${OPENWEATHERMAP_API_KEY}`);
-    return response.data.weather;
-}
-
-// Fetching elevation data from Google Elevation API
-async function getElevation(latitude, longitude) {
-    try {
-        const response = await axios.get(`https://maps.googleapis.com/maps/api/elevation/json?locations=${latitude},${longitude}&key=${GOOGLE_ELEVATION_API_KEY}`);
-        return response.data.results[0]?.elevation || 0;
-    } catch (error) {
-        console.error('Error fetching elevation data:', error);
-        return 0; // Default elevation if API fails
-    }
-}
-
-// Calculating 5G settings
-function calculate5GSettings(roadData, populationDensity, buildingData, weatherData, elevation) {
-    let subCarrierWidth;
-
-    if (elevation > 250) {
-        subCarrierWidth = '50 MHz'; // Smaller subcarrier width for high elevation
-    } else {
-        //subCarrierWidth = roadData.length > 50 ? '100 MHz' : '50 MHz';
-        subCarrierWidth = '100 MHz';
+        // Get building data
+        const buildingResponse = await axios.get(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`
+        );
+        totalBuildings += buildingResponse.data.length;
     }
 
+    // Compute averages
+    const numPoints = coordinates.length;
     return {
-        subCarrierWidth,
-        frequencyBand: populationDensity && populationDensity.length > 1000 ? 'n78' : 'n77',
-        cyclicPrefix: buildingData.length > 50 ? 'Extended' : 'Normal',
-        weather: weatherData ? weatherData[0]?.description : 'Clear',
-        elevation: `${elevation} meters`
+        avgElevation: totalElevation / numPoints,
+        avgSpeed: totalSpeed / numPoints,
+        avgPopulation: totalPopulation / numPoints,
+        avgBuildings: totalBuildings / numPoints
     };
 }
-// Calculating 5G settings with elevation
-function calculate5GSettings(roadData, populationDensity, buildingData, weatherData, elevation) {
-    const populationThreshold = 1000;  
-    const buildingThreshold = 50;      
-    const trafficSpeedThreshold = 60;  
-    const elevationThreshold = 250;
 
-    console.log("elevation")
-    console.log(elevation)
+// Calculate 5G settings based on average data
+function calculate5GSettings(avgData, weatherData) {
+    const { avgElevation, avgSpeed, avgPopulation, avgBuildings } = avgData;
 
-
-    // Adjust subcarrier width based on elevation
-    const subCarrierWidth = (elevation > elevationThreshold && roadData.some(road => road.speed < trafficSpeedThreshold) ) ? '100MHz' : '50MHz';
-    
-    // Choose frequency band based on road speed data
-    const frequencyBand = roadData.some(road => road.speed > trafficSpeedThreshold) ? 'n78' : 'n77';
-
-    // Set cyclic prefix based on building density
-    const cyclicPrefix = buildingData.length > buildingThreshold ? 'Extended' : 'Normal';
+    const subCarrierWidth = avgElevation > 250 ? '50 MHz' : avgPopulation > 1000 ? '100 MHz' : '75 MHz';
+    const frequencyBand = avgSpeed > 60 ? 'n78' : 'n77';
+    const cyclicPrefix = avgBuildings > 50 ? 'Extended' : 'Normal';
 
     return {
         subCarrierWidth,
         frequencyBand,
         cyclicPrefix,
         weather: weatherData ? weatherData[0]?.description : 'Clear',
-        elevation: `${elevation} meters`
+        elevation: `${avgElevation.toFixed(2)} meters`
     };
 }
 
-  
-app.get('/get-network-settings', async (req, res) => {
-    const { latitude, longitude } = req.query;
-
+// Handle POST request with multiple coordinates
+app.post('/get-network-settings', async (req, res) => {
     try {
-        const roadData = await getRoadData(latitude, longitude);
-        const populationDensity = await getPopulationDensity(latitude, longitude);
-        const buildingData = await getBuildingsData(latitude, longitude);
-        const weatherData = await getWeatherData(latitude, longitude);
-        const elevation = await getElevation(latitude, longitude);
+        const { coordinates } = req.body;
+        if (!coordinates || coordinates.length === 0) {
+            return res.status(400).json({ error: 'Invalid coordinates' });
+        }
 
-        const settings = calculate5GSettings(roadData, populationDensity, buildingData, weatherData, elevation);
+        const avgData = await fetchAveragedData(coordinates);
+
+        // get weather data for the first coordinate
+        const { latitude, longitude } = coordinates[0];
+        const weatherResponse = await axios.get(
+            `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${OPENWEATHERMAP_API_KEY}`
+        );
+        const weatherData = weatherResponse.data.weather;
+
+        const settings = calculate5GSettings(avgData, weatherData);
         res.json(settings);
     } catch (error) {
-        res.status(500).json({ error: 'Error fetching data' });
         console.error('Error fetching data:', error);
+        res.status(500).json({ error: 'Error fetching data' });
     }
 });
 
