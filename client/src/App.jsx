@@ -1,55 +1,64 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Rectangle } from 'react-leaflet';
+import { MapContainer, TileLayer, FeatureGroup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw'; 
+import 'leaflet-draw';
 
 const App = () => {
-    const [areaCoordinates, setAreaCoordinates] = useState([[51.505, -0.09], [51.51, -0.1]]);
+    const [areaCoordinates, setAreaCoordinates] = useState(null);
     const [networkSettings, setNetworkSettings] = useState(null);
     const [error, setError] = useState(null);
     const mapRef = useRef(null);
-    const mapInstance = useRef(null);  
+    const featureGroupRef = useRef(null);
+    const franceBounds = [
+        [41.0, -5.0],  // Southwest corner (near Spain)
+        [51.5, 10.0]   // Northeast corner (near Germany)
+    ];
 
-    const fetchNetworkSettings = () => {
-        const [lat, lon] = areaCoordinates[0];  
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', `http://localhost:8080/get-network-settings?latitude=${lat}&longitude=${lon}`, true);
-        
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    const response = JSON.parse(xhr.responseText);
-                    setNetworkSettings(response);
-                } else {
-                    setError('An error occurred while fetching data. Please try again.');
-                    console.error('Error fetching network settings:', xhr.statusText);
-                }
+    // Function to fetch network settings including elevation
+    const fetchNetworkSettings = async () => {
+        if (!areaCoordinates) {
+            setError("Please select an area first!");
+            return;
+        }
+    
+        const { latitude, longitude } = areaCoordinates;
+    
+        try {
+            const response = await fetch(`http://localhost:8080/get-network-settings?latitude=${latitude}&longitude=${longitude}`);
+            
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.statusText}`);
             }
-        };
-
-        xhr.onerror = function () {
-            setError('An error occurred while fetching data. Please try again.');
-            console.error('Request failed');
-        };
-
-        xhr.send();
+    
+            const data = await response.json();
+            setNetworkSettings(data);
+            setError(null);
+        } catch (err) {
+            setError("Error fetching network settings. Ensure the backend is running.");
+            console.error("Fetch error:", err);
+        }
     };
+    
 
-    const initializeMap = () => {
-        if (mapInstance.current) return; 
+    // Function to initialize map and drawing controls
+    useEffect(() => {
+        if (!mapRef.current) return;
+
         const map = L.map(mapRef.current, {
-            center: [46.603354, 1.888334],
+            center: [46.603354, 1.888334], // France center
             zoom: 6,
+            maxBounds: franceBounds, // Restrict movement
+            maxBoundsViscosity: 1.0  // Prevent panning outside bounds
         });
-
-        mapInstance.current = map;  
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-        const drawnItems = new L.FeatureGroup().addTo(map);
+        const drawnItems = new L.FeatureGroup();
+        featureGroupRef.current = drawnItems;
+        map.addLayer(drawnItems);
+
         const drawControl = new L.Control.Draw({
             edit: { featureGroup: drawnItems },
             draw: {
@@ -64,45 +73,56 @@ const App = () => {
         map.addControl(drawControl);
 
         map.on('draw:created', (event) => {
+            drawnItems.clearLayers(); // Clear previous rectangles
             const layer = event.layer;
-            drawnItems.addLayer(layer); 
+            drawnItems.addLayer(layer);
 
             if (layer instanceof L.Rectangle) {
                 const bounds = layer.getBounds();
-                setAreaCoordinates([
-                    [bounds.getSouth(), bounds.getWest()],
-                    [bounds.getNorth(), bounds.getEast()],
-                ]);
+                const center = bounds.getCenter(); // Get center of selected area
+                setAreaCoordinates({ 
+                    latitude: center.lat, 
+                    longitude: center.lng 
+                });
             }
         });
-    };
 
-    useEffect(() => {
-        if (mapRef.current) {
-            initializeMap();
-        }
+        return () => {
+            map.remove();
+        };
     }, []);
 
     return (
         <div>
-            <h1>5G Network area configuration</h1>
+            <h1>5G Network Area Configuration</h1>
             <div style={{ display: 'flex' }}>
-                <div id="map" ref={mapRef} style={{ width: '100%', height: '500px' }}></div>
-                <div style={{ width: '30%', paddingLeft: '20px'}}>
-                    <h2>Data of selected srea</h2>
-                    <button onClick={fetchNetworkSettings}>Get configuration</button>
+                {/* Leaflet Map */}
+                <div ref={mapRef} style={{ width: '70%', height: '500px' }}></div>
+
+                {/* Information Panel */}
+                <div style={{ width: '30%', paddingLeft: '20px' }}>
+                    <h2>Selected Area Data</h2>
+                    <button onClick={fetchNetworkSettings}>Get Configuration</button>
+
                     {networkSettings && (
                         <div>
-                            <h3>Recommended 5G:</h3>
-                            <p>Sub-carrier width: {networkSettings.subCarrierWidth}</p>
-                            <p>Frequency band: {networkSettings.frequencyBand}</p>
-                            <p>Cyclic prefix: {networkSettings.cyclicPrefix}</p>
-                            <p>Weather: {networkSettings.weather}</p>
+                            <h3>Recommended 5G Settings:</h3>
+                            <p><strong>Sub-carrier width:</strong> {networkSettings.subCarrierWidth}</p>
+                            <p><strong>Frequency band:</strong> {networkSettings.frequencyBand}</p>
+                            <p><strong>Cyclic prefix:</strong> {networkSettings.cyclicPrefix}</p>
+                            <p><strong>Weather:</strong> {networkSettings.weather}</p>
+                            <p><strong>Elevation:</strong> {networkSettings.elevation}</p>
                         </div>
                     )}
+
                     {error && <div style={{ color: 'red' }}><strong>{error}</strong></div>}
-                    <h3>Coordinates of selected area:</h3>
-                    <pre>{JSON.stringify(areaCoordinates, null, 2)}</pre>
+
+                    <h3>Coordinates of Selected Area:</h3>
+                    {areaCoordinates ? (
+                        <pre>{JSON.stringify(areaCoordinates, null, 2)}</pre>
+                    ) : (
+                        <p>No area selected.</p>
+                    )}
                 </div>
             </div>
         </div>
