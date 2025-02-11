@@ -4,11 +4,11 @@ const cors = require('cors');
 const app = express();
 
 app.use(cors());
-app.use(express.json()); 
+app.use(express.json());
 
 const OPENCAGE_API_KEY = 'e0f1785865eb4251b07aaa84d52f33bd';
 const OPENWEATHERMAP_API_KEY = '27b72ec98a488f4d73ea9f87e7bc0efd';
-const GOOGLE_ELEVATION_API_KEY = 'AIzaSyDIOMUgnDOklu1gKXqhfjvcMO033p52W_E&fbclid=IwY2xjawIXQj1leHRuA2FlbQIxMAABHSaM77t0Rn0d70h10rN9Ioyf11QbgvsirSBOruJR7eFlTI_jUgeTEbZApg_aem_YHU8YkfpahH6Tl_u4ZJABw';
+const GOOGLE_ELEVATION_API_KEY = 'AIzaSyDIOMUgnDOklu1gKXqhfjvcMO033p52W_E';
 
 // Function to map OSM road types to speed limits (km/h)
 function getSpeedLimit(roadType) {
@@ -54,7 +54,6 @@ async function fetchAveragedData(coordinates) {
             );
 
             if (roadResponse.data.length > 0) {
-                //console.log(roadResponse.data)
                 roadResponse.data.forEach(road => {
                     if (road.class === 'highway' && road.type) {
                         totalSpeed += getSpeedLimit(road.type);
@@ -66,13 +65,29 @@ async function fetchAveragedData(coordinates) {
             console.error("Error fetching road data:", error);
         }
 
-        // Get population density
-        const populationResponse = await axios.get(
-            `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${OPENCAGE_API_KEY}`
-        );
+        // Get population density from Overpass API
+        try {
+            const overpassQuery = `
+                [out:json];
+                node(around:50000,${latitude},${longitude})["place"="city"];
+                out body;
+            `;
 
-        console.log(populationResponse.data)
-        totalPopulation += Math.random() * 2000;
+            const populationResponse = await axios.get(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`);
+            console.log("Population Response:", populationResponse.data);
+
+            if (populationResponse.data.elements.length > 0) {
+                const population = populationResponse.data.elements[0].tags.population 
+                    ? parseInt(populationResponse.data.elements[0].tags.population, 10) 
+                    : 1000; // Default to 1000 if unknown
+                totalPopulation += population;
+            } else {
+                totalPopulation += 1000; // Default if no data found
+            }
+        } catch (error) {
+            console.error("Error fetching population density:", error);
+            totalPopulation += 1000; // Default in case of error
+        }
 
         // Get building height using Overpass API
         try {
@@ -80,13 +95,30 @@ async function fetchAveragedData(coordinates) {
                 `https://overpass-api.de/api/interpreter?data=[out:json];way["building"](around:100,${latitude},${longitude});out body;`
             );
 
+            console.log("Building Response:", buildingResponse.data);
+
             const buildings = buildingResponse.data.elements;
             buildings.forEach(building => {
-                if (building.tags && building.tags["height"]) {
-                    totalBuildingHeight += parseFloat(building.tags["height"]);
-                    buildingCount++;
+                if (building.tags) {
+                    let height = 0;
+
+                    // Check for 'height' tag
+                    if (building.tags["height"]) {
+                        height = parseFloat(building.tags["height"]);
+                    }
+                    // If 'height' is missing, check for 'levels' tag and estimate height
+                    else if (building.tags["building:levels"]) {
+                        height = parseInt(building.tags["building:levels"], 10) * 3; // Assume 3m per floor
+                    }
+
+                    // If valid height is found, add it
+                    if (height > 0) {
+                        totalBuildingHeight += height;
+                        buildingCount++;
+                    }
                 }
             });
+
         } catch (error) {
             console.error("Error fetching building height:", error);
         }
@@ -96,12 +128,11 @@ async function fetchAveragedData(coordinates) {
     const numPoints = coordinates.length;
     return {
         avgElevation: totalElevation / numPoints,
-        avgSpeed: roadCount > 0 ? totalSpeed / roadCount : 50, // Default 50 km/h if no road data
+        avgSpeed: roadCount > 0 ? totalSpeed / roadCount : 5, // Default 50 km/h if no road data
         avgPopulation: totalPopulation / numPoints,
         avgBuildingHeight: buildingCount > 0 ? totalBuildingHeight / buildingCount : 10 // Default 10m if no data
     };
 }
-
 
 // Calculate 5G settings based on average data
 function calculate5GSettings(avgData, weatherData) {
@@ -119,15 +150,14 @@ function calculate5GSettings(avgData, weatherData) {
     }
 
     let frequencyBand;
-    if (avgPopulation>1000) {
-        if(avgBuildingHeight < 35) frequencyBand = '5 GHz';  
-        else frequencyBand = '2.4GHz';
-    }  
-    else {
+    if (avgPopulation > 1000) {
+        if (avgBuildingHeight < 35) frequencyBand = '5 GHz';  
+        else frequencyBand = '2.4 GHz';
+    } else {
         frequencyBand = '800 MHz';  
     }
 
-    const cyclicPrefix = avgPopulation < 1000 ? 'Extended' : 'Normal';
+    const cyclicPrefix = avgPopulation < 900 ? 'Extended' : 'Normal';
 
     return {
         subCarrierWidth,
@@ -141,7 +171,6 @@ function calculate5GSettings(avgData, weatherData) {
     };
 }
 
-
 // Handle POST request with multiple coordinates
 app.post('/get-network-settings', async (req, res) => {
     try {
@@ -152,7 +181,7 @@ app.post('/get-network-settings', async (req, res) => {
 
         const avgData = await fetchAveragedData(coordinates);
 
-        // get weather data for the first coordinate
+        // Get weather data for the first coordinate
         const { latitude, longitude } = coordinates[0];
         const weatherResponse = await axios.get(
             `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${OPENWEATHERMAP_API_KEY}`

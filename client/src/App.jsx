@@ -119,6 +119,7 @@ const App = () => {
                             <h3>Recommended 5G Settings:</h3>
                             <p><strong>Sub-carrier width:</strong> {networkSettings.subCarrierWidth}</p>
                             <p><strong>Cyclic prefix:</strong> {networkSettings.cyclicPrefix}</p>
+                            <p><strong>Frequency band:</strong> {networkSettings.frequencyBand}</p>
                             <p><strong>Average Speed:</strong> {parseFloat(networkSettings.avgSpeed).toFixed(2)}</p>
                             <p><strong>Population Density:</strong> {parseFloat(networkSettings.avgPopulation).toFixed(2)}</p>
                             <p><strong>Weather:</strong> {networkSettings.weather}</p>
