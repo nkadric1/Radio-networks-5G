@@ -13,13 +13,13 @@ const App = () => {
     const mapRef = useRef(null);
     const featureGroupRef = useRef(null);
 
-    // Define France bounding box (to limit selection)
+    //we have tried to limit selected area
     const franceBounds = [
-        [41.0, -5.0],  // Southwest corner (Spain border)
-        [51.5, 10.0]   // Northeast corner (Germany border)
+        [41.0, -5.0],  
+        [51.5, 10.0]   
     ];
 
-    // Function to fetch network settings from the backend
+    //fetching data from backend
     const fetchNetworkSettings = async () => {
         if (!areaCoordinates || areaCoordinates.length === 0) {
             setError("Please select an area first!");
@@ -83,9 +83,8 @@ const App = () => {
             if (layer instanceof L.Rectangle) {
                 const bounds = layer.getBounds();
 
-                // Generate multiple sample points within the rectangle
                 const samplePoints = [];
-                const numSamples = 5; // Number of points to sample
+                const numSamples = 5; 
 
                 for (let i = 0; i < numSamples; i++) {
                     const lat = bounds.getSouth() + (Math.random() * (bounds.getNorth() - bounds.getSouth()));
@@ -107,12 +106,10 @@ const App = () => {
             <h1>5G Network Area Configuration</h1>
 
             <div className="content">
-                {/* Leaflet Map */}
                 <div className="map-container">
                     <div ref={mapRef} className="map"></div>
                 </div>
 
-                {/* Information Panel */}
                 <div className="info-panel">
                     <h2>Selected Area Data</h2>
                     <button className="btn" onClick={fetchNetworkSettings}>Get Configuration</button>
@@ -126,6 +123,8 @@ const App = () => {
                             <p><strong>Population Density:</strong> {parseFloat(networkSettings.avgPopulation).toFixed(2)}</p>
                             <p><strong>Weather:</strong> {networkSettings.weather}</p>
                             <p><strong>Elevation:</strong> {parseFloat(networkSettings.elevation).toFixed(2)} meters</p>
+                            <p><strong>Building height:</strong> {parseFloat(networkSettings.avgBuildingHeight).toFixed(2)} meters</p>
+
                         </div>
                     )}
 

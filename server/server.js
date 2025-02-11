@@ -10,12 +10,33 @@ const OPENCAGE_API_KEY = 'e0f1785865eb4251b07aaa84d52f33bd';
 const OPENWEATHERMAP_API_KEY = '27b72ec98a488f4d73ea9f87e7bc0efd';
 const GOOGLE_ELEVATION_API_KEY = 'AIzaSyDIOMUgnDOklu1gKXqhfjvcMO033p52W_E&fbclid=IwY2xjawIXQj1leHRuA2FlbQIxMAABHSaM77t0Rn0d70h10rN9Ioyf11QbgvsirSBOruJR7eFlTI_jUgeTEbZApg_aem_YHU8YkfpahH6Tl_u4ZJABw';
 
+// Function to map OSM road types to speed limits (km/h)
+function getSpeedLimit(roadType) {
+    const speedMapping = {
+        motorway: 120,
+        trunk: 100,
+        primary: 80,
+        secondary: 60,
+        tertiary: 50,
+        unclassified: 30,
+        residential: 30,
+        living_street: 30,
+        service: 10,
+        pedestrian: 10,
+        footway: 10
+    };
+    
+    return speedMapping[roadType] || 50; // Default speed if type is unknown
+}
+
 // Fetch data for multiple points and compute the average
 async function fetchAveragedData(coordinates) {
     let totalElevation = 0;
     let totalSpeed = 0;
     let totalPopulation = 0;
-    let totalBuildings = 0;
+    let totalBuildingHeight = 0;
+    let buildingCount = 0;
+    let roadCount = 0;
 
     for (let coord of coordinates) {
         const { latitude, longitude } = coord;
@@ -26,39 +47,65 @@ async function fetchAveragedData(coordinates) {
         );
         totalElevation += elevationResponse.data.results[0]?.elevation || 0;
 
-        // Get road data 
-        const roadResponse = await axios.get(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`
-        );
-        const roadSpeed = roadResponse.data.length > 0 ? Math.random() * 100 : 50; // Simulated speed (replace with actual API)
-        totalSpeed += roadSpeed;
+        // Get road data
+        try {
+            const roadResponse = await axios.get(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`
+            );
+
+            if (roadResponse.data.length > 0) {
+                //console.log(roadResponse.data)
+                roadResponse.data.forEach(road => {
+                    if (road.class === 'highway' && road.type) {
+                        totalSpeed += getSpeedLimit(road.type);
+                        roadCount++;
+                    }
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching road data:", error);
+        }
 
         // Get population density
         const populationResponse = await axios.get(
             `https://api.opencagedata.com/geocode/v1/json?q=${latitude},${longitude}&key=${OPENCAGE_API_KEY}`
         );
-        totalPopulation += Math.random() * 2000; // Simulated population density (replace with actual API)
 
-        // Get building data
-        const buildingResponse = await axios.get(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`
-        );
-        totalBuildings += buildingResponse.data.length;
+        console.log(populationResponse.data)
+        totalPopulation += Math.random() * 2000;
+
+        // Get building height using Overpass API
+        try {
+            const buildingResponse = await axios.get(
+                `https://overpass-api.de/api/interpreter?data=[out:json];way["building"](around:100,${latitude},${longitude});out body;`
+            );
+
+            const buildings = buildingResponse.data.elements;
+            buildings.forEach(building => {
+                if (building.tags && building.tags["height"]) {
+                    totalBuildingHeight += parseFloat(building.tags["height"]);
+                    buildingCount++;
+                }
+            });
+        } catch (error) {
+            console.error("Error fetching building height:", error);
+        }
     }
 
     // Compute averages
     const numPoints = coordinates.length;
     return {
         avgElevation: totalElevation / numPoints,
-        avgSpeed: totalSpeed / numPoints,
+        avgSpeed: roadCount > 0 ? totalSpeed / roadCount : 50, // Default 50 km/h if no road data
         avgPopulation: totalPopulation / numPoints,
-        avgBuildings: totalBuildings / numPoints
+        avgBuildingHeight: buildingCount > 0 ? totalBuildingHeight / buildingCount : 10 // Default 10m if no data
     };
 }
 
+
 // Calculate 5G settings based on average data
 function calculate5GSettings(avgData, weatherData) {
-    const { avgElevation, avgSpeed, avgPopulation, avgBuildings } = avgData;
+    const { avgElevation, avgSpeed, avgPopulation, avgBuildingHeight } = avgData;
 
     let subCarrierWidth;
     if (avgSpeed > 100) {
@@ -71,8 +118,16 @@ function calculate5GSettings(avgData, weatherData) {
         subCarrierWidth = '15 kHz';  
     }
 
-    const frequencyBand = avgSpeed > 60 ? 'n78' : 'n77';
-    const cyclicPrefix = avgBuildings > 50 ? 'Extended' : 'Normal';
+    let frequencyBand;
+    if (avgPopulation>1000) {
+        if(avgBuildingHeight < 35) frequencyBand = '5 GHz';  
+        else frequencyBand = '2.4GHz';
+    }  
+    else {
+        frequencyBand = '800 MHz';  
+    }
+
+    const cyclicPrefix = avgPopulation < 1000 ? 'Extended' : 'Normal';
 
     return {
         subCarrierWidth,
@@ -81,8 +136,8 @@ function calculate5GSettings(avgData, weatherData) {
         weather: weatherData ? weatherData[0]?.description : 'Clear',
         elevation: `${avgElevation.toFixed(2)} meters`,
         avgSpeed,
-        avgBuildings,
-        avgPopulation
+        avgPopulation,
+        avgBuildingHeight
     };
 }
 
