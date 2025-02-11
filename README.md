@@ -5,7 +5,11 @@
 4. [Nerma Kadrić](https://github.com/nkadric1)
 
 ## About app
-5G NR is a web application that according to the average/max speed over an area (given by a coordinates of the square center) decides what is the better sub-carrier width, frequency band, and cyclic mode that fit the area.
+This application determines the optimal 5G NR configuration (sub-carrier width, frequency band and cyclic prefix) based on road speed, population density and building distribution over a selected area. The user selects an area on a map and the system computes the best network settings based on the average values of the collected data.
+
+Prerequisites - Ensure you have Node.js (v18 or later)  installed on your machine.
+Once the ZIP file is extracted, open a terminal and navigate to the project folder.To start the application, launch the backend server with cd server and npm run dev and then start the frontend with cd client and npm run dev.
+
 
 ----------------
 
