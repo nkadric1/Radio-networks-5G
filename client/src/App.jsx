@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw';
+import './App.css'; 
 
 const App = () => {
     const [areaCoordinates, setAreaCoordinates] = useState([]);
@@ -82,9 +83,9 @@ const App = () => {
             if (layer instanceof L.Rectangle) {
                 const bounds = layer.getBounds();
 
-    
+                // Generate multiple sample points within the rectangle
                 const samplePoints = [];
-                const numSamples = 5; // num of points to sample
+                const numSamples = 5; // Number of points to sample
 
                 for (let i = 0; i < numSamples; i++) {
                     const lat = bounds.getSouth() + (Math.random() * (bounds.getNorth() - bounds.getSouth()));
@@ -102,35 +103,46 @@ const App = () => {
     }, []);
 
     return (
-        <div>
+        <div className="container">
             <h1>5G Network Area Configuration</h1>
-            <div style={{ display: 'flex' }}>
-                {/* Leaflt Map */}
-                <div ref={mapRef} style={{ width: '70%', height: '500px' }}></div>
 
-                {/* information Panel */}
-                <div style={{ width: '30%', paddingLeft: '20px' }}>
+            <div className="content">
+                {/* Leaflet Map */}
+                <div className="map-container">
+                    <div ref={mapRef} className="map"></div>
+                </div>
+
+                {/* Information Panel */}
+                <div className="info-panel">
                     <h2>Selected Area Data</h2>
-                    <button onClick={fetchNetworkSettings}>Get Configuration</button>
+                    <button className="btn" onClick={fetchNetworkSettings}>Get Configuration</button>
 
                     {networkSettings && (
-                        <div>
+                        <div className="results">
                             <h3>Recommended 5G Settings:</h3>
                             <p><strong>Sub-carrier width:</strong> {networkSettings.subCarrierWidth}</p>
-                            <p><strong>Frequency band:</strong> {networkSettings.frequencyBand}</p>
                             <p><strong>Cyclic prefix:</strong> {networkSettings.cyclicPrefix}</p>
+                            <p><strong>Average Speed:</strong> {parseFloat(networkSettings.avgSpeed).toFixed(2)}</p>
+                            <p><strong>Population Density:</strong> {parseFloat(networkSettings.avgPopulation).toFixed(2)}</p>
                             <p><strong>Weather:</strong> {networkSettings.weather}</p>
-                            <p><strong>Elevation:</strong> {networkSettings.elevation}</p>
+                            <p><strong>Elevation:</strong> {parseFloat(networkSettings.elevation).toFixed(2)} meters</p>
                         </div>
                     )}
 
-                    {error && <div style={{ color: 'red' }}><strong>{error}</strong></div>}
+                    {error && <div className="error">{error}</div>}
 
-                    <h3>Sampled Coordinates of Selected Area:</h3>
+                    <h3>Sampled Coordinates:</h3>
                     {areaCoordinates.length > 0 ? (
-                        <pre>{JSON.stringify(areaCoordinates, null, 2)}</pre>
+                        <div className="coordinates">
+                            {areaCoordinates.map((point, index) => (
+                                <div key={index} className="coordinate-item">
+                                    <span className="label">Latitude:</span> {point.latitude.toFixed(6)}
+                                    <span className="label">Longitude:</span> {point.longitude.toFixed(6)}
+                                </div>
+                            ))}
+                        </div>
                     ) : (
-                        <p>No area selected.</p>
+                        <p className="no-data">No area selected.</p>
                     )}
                 </div>
             </div>

@@ -60,7 +60,17 @@ async function fetchAveragedData(coordinates) {
 function calculate5GSettings(avgData, weatherData) {
     const { avgElevation, avgSpeed, avgPopulation, avgBuildings } = avgData;
 
-    const subCarrierWidth = avgElevation > 250 ? '50 MHz' : avgPopulation > 1000 ? '100 MHz' : '75 MHz';
+    let subCarrierWidth;
+    if (avgSpeed > 100) {
+        subCarrierWidth = '120 kHz'; 
+    } else if (avgSpeed > 60) {
+        subCarrierWidth = '60 kHz';  
+    } else if (avgSpeed > 30) {
+        subCarrierWidth = '30 kHz'; 
+    } else {
+        subCarrierWidth = '15 kHz';  
+    }
+
     const frequencyBand = avgSpeed > 60 ? 'n78' : 'n77';
     const cyclicPrefix = avgBuildings > 50 ? 'Extended' : 'Normal';
 
@@ -69,9 +79,13 @@ function calculate5GSettings(avgData, weatherData) {
         frequencyBand,
         cyclicPrefix,
         weather: weatherData ? weatherData[0]?.description : 'Clear',
-        elevation: `${avgElevation.toFixed(2)} meters`
+        elevation: `${avgElevation.toFixed(2)} meters`,
+        avgSpeed,
+        avgBuildings,
+        avgPopulation
     };
 }
+
 
 // Handle POST request with multiple coordinates
 app.post('/get-network-settings', async (req, res) => {
