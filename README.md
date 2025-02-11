@@ -15,7 +15,6 @@ Once the ZIP file is extracted, open a terminal and navigate to the project fold
 ##  Features
 -  **Frontend:** React + Vite + Axios  
 -  **Backend:** Node.js + Express  
--  **Uses real LTE formulas for accurate calculations**  
 -  **Handles input validation and error messages**  
 -  **Responsive UI with a clean, modern design**
   
