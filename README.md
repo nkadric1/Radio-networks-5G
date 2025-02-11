@@ -9,6 +9,7 @@ This application determines the optimal 5G NR configuration (sub-carrier width, 
 
 Prerequisites - Ensure you have Node.js (v18 or later)  installed on your machine.
 Once the ZIP file is extracted, open a terminal and navigate to the project folder.To start the application, launch the backend server with cd server and npm run dev and then start the frontend with cd client and npm run dev.
+
 ---
 
 ##  Features
@@ -16,8 +17,8 @@ Once the ZIP file is extracted, open a terminal and navigate to the project fold
 -  **Backend:** Node.js + Express  
 -  **Uses real LTE formulas for accurate calculations**  
 -  **Handles input validation and error messages**  
--  **Responsive UI with a clean, modern design**  
-
+-  **Responsive UI with a clean, modern design**
+  
 ---
 ----------------
 
