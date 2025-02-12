@@ -50,7 +50,7 @@ const App = () => {
         if (!mapRef.current) return;
 
         const map = L.map(mapRef.current, {
-            center: [46.603354, 1.888334], // France center
+            center: [46.603354, 1.888334], // France center 
             zoom: 6,
             maxBounds: franceBounds, 
             maxBoundsViscosity: 1.0  

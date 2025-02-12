@@ -10,7 +10,11 @@ const OPENCAGE_API_KEY = 'e0f1785865eb4251b07aaa84d52f33bd';
 const OPENWEATHERMAP_API_KEY = '27b72ec98a488f4d73ea9f87e7bc0efd';
 const GOOGLE_ELEVATION_API_KEY = 'AIzaSyDIOMUgnDOklu1gKXqhfjvcMO033p52W_E';
 
-// Function to map OSM road types to speed limits (km/h)
+const axiosInstance = axios.create({
+    timeout: 5000, // set timeout to 5 seconds
+});
+
+// mapping OSM road types to speed limits (km/h)
 function getSpeedLimit(roadType) {
     const speedMapping = {
         motorway: 120,
@@ -26,11 +30,11 @@ function getSpeedLimit(roadType) {
         footway: 10
     };
     
-    return speedMapping[roadType] || 50; // Default speed if type is unknown
+    return speedMapping[roadType] || 50; // default speed if type is there is no data returned from API
 }
 
-// Fetch data for multiple points and compute the average
 async function fetchAveragedData(coordinates) {
+    try{
     let totalElevation = 0;
     let totalSpeed = 0;
     let totalPopulation = 0;
@@ -41,13 +45,13 @@ async function fetchAveragedData(coordinates) {
     for (let coord of coordinates) {
         const { latitude, longitude } = coord;
 
-        // Get elevation
+        // API for elevation 
         const elevationResponse = await axios.get(
             `https://maps.googleapis.com/maps/api/elevation/json?locations=${latitude},${longitude}&key=${GOOGLE_ELEVATION_API_KEY}`
         );
         totalElevation += elevationResponse.data.results[0]?.elevation || 0;
 
-        // Get road data
+        // API for road data
         try {
             const roadResponse = await axios.get(
                 `https://nominatim.openstreetmap.org/search?format=json&q=${latitude},${longitude}`
@@ -65,53 +69,53 @@ async function fetchAveragedData(coordinates) {
             console.error("Error fetching road data:", error);
         }
 
-        // Get population density from Overpass API
+        // API for population density
+        //The Overpass API finds the nearest city, town, village, or suburb within 50 km of the given latitude/longitude.
+        //It checks if the location has a population tag in OpenStreetMap.
+        //If found, it extracts the population; otherwise, it assigns a default value of 1000.
         try {
             const overpassQuery = `
                 [out:json];
-                node(around:50000,${latitude},${longitude})["place"="city"];
+                node(around:50000,${latitude},${longitude})["place"~"city|town|village|suburb"];
                 out body;
             `;
-
+        
             const populationResponse = await axios.get(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`);
-            console.log("Population Response:", populationResponse.data);
-
-            if (populationResponse.data.elements.length > 0) {
+        
+            if (populationResponse.data && populationResponse.data.elements.length > 0) {
                 const population = populationResponse.data.elements[0].tags.population 
                     ? parseInt(populationResponse.data.elements[0].tags.population, 10) 
-                    : 1000; // Default to 1000 if unknown
+                    : 1000; 
                 totalPopulation += population;
             } else {
-                totalPopulation += 1000; // Default if no data found
+                totalPopulation += 1000; 
             }
         } catch (error) {
             console.error("Error fetching population density:", error);
-            totalPopulation += 1000; // Default in case of error
+            totalPopulation += 1000;
         }
+        
 
-        // Get building height using Overpass API
+        // API to get data about building height
+        //The Overpass API extracts building height data from OpenStreetMap (OSM) by querying structures tagged as "building" within a 100m radius of the given coordinates. 
+        //If the height attribute is missing, it estimates it using the number of floors ("building:levels") by assuming 3 meters per floor.
         try {
             const buildingResponse = await axios.get(
                 `https://overpass-api.de/api/interpreter?data=[out:json];way["building"](around:100,${latitude},${longitude});out body;`
             );
-
-            console.log("Building Response:", buildingResponse.data);
 
             const buildings = buildingResponse.data.elements;
             buildings.forEach(building => {
                 if (building.tags) {
                     let height = 0;
 
-                    // Check for 'height' tag
                     if (building.tags["height"]) {
                         height = parseFloat(building.tags["height"]);
                     }
-                    // If 'height' is missing, check for 'levels' tag and estimate height
                     else if (building.tags["building:levels"]) {
                         height = parseInt(building.tags["building:levels"], 10) * 3; // Assume 3m per floor
                     }
 
-                    // If valid height is found, add it
                     if (height > 0) {
                         totalBuildingHeight += height;
                         buildingCount++;
@@ -124,17 +128,19 @@ async function fetchAveragedData(coordinates) {
         }
     }
 
-    // Compute averages
     const numPoints = coordinates.length;
     return {
         avgElevation: totalElevation / numPoints,
-        avgSpeed: roadCount > 0 ? totalSpeed / roadCount : 5, // Default 50 km/h if no road data
+        avgSpeed: roadCount > 0 ? totalSpeed / roadCount : 5, // default speed set to 50 km/h if no road data
         avgPopulation: totalPopulation / numPoints,
-        avgBuildingHeight: buildingCount > 0 ? totalBuildingHeight / buildingCount : 10 // Default 10m if no data
+        avgBuildingHeight: buildingCount > 0 ? totalBuildingHeight / buildingCount : 10 // default 10m if no data (average height of a house)
     };
 }
+catch(error){
+    return;
+}
+}
 
-// Calculate 5G settings based on average data
 function calculate5GSettings(avgData, weatherData) {
     const { avgElevation, avgSpeed, avgPopulation, avgBuildingHeight } = avgData;
 
@@ -157,7 +163,7 @@ function calculate5GSettings(avgData, weatherData) {
         frequencyBand = '800 MHz';  
     }
 
-    const cyclicPrefix = avgPopulation < 900 ? 'Extended' : 'Normal';
+    const cyclicPrefix = avgPopulation <=1000 ? 'Extended' : 'Normal';
 
     return {
         subCarrierWidth,
@@ -171,7 +177,6 @@ function calculate5GSettings(avgData, weatherData) {
     };
 }
 
-// Handle POST request with multiple coordinates
 app.post('/get-network-settings', async (req, res) => {
     try {
         const { coordinates } = req.body;
@@ -181,7 +186,6 @@ app.post('/get-network-settings', async (req, res) => {
 
         const avgData = await fetchAveragedData(coordinates);
 
-        // Get weather data for the first coordinate
         const { latitude, longitude } = coordinates[0];
         const weatherResponse = await axios.get(
             `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${OPENWEATHERMAP_API_KEY}`
